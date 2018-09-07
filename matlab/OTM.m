@@ -58,6 +58,7 @@ classdef OTM < handle
             drawLinks(1:links.size()) = DrawLink();
             for i=1:links.size()
                 link = links.get(i-1);
+                disp(link.getId())
                 drawLinks(i) = DrawLink(link);
                 drawLinks(i).draw(link,link.lanegroups,this.lanewidth);
                 for j=1:link.lanegroups.size()
@@ -148,11 +149,20 @@ classdef OTM < handle
         end
         
         % run a simulation
-        function [] = run_simple(this,start_time,duration)
+        function [] = run_simple(this,start_time,duration,request_links,request_dt)
             
             this.start_time = start_time;
             this.duration = duration;
                         
+            if nargin>3
+                link_ids = java.util.ArrayList;
+                for i=1:numel(request_links)
+                    link_ids.add(java.lang.Long(request_links(i)));
+                end
+                this.api.request_links_flow([],link_ids, java.lang.Float(request_dt));
+                this.api.request_links_veh([], link_ids, java.lang.Float(request_dt));
+            end
+            
             % run the simulation
             this.api.run( uint32(start_time), uint32(duration));
             
@@ -230,65 +240,111 @@ classdef OTM < handle
             
         end
         
-        function [time,X] = get_state_trajectory(this,dt)
+        function [X] = get_state_trajectory(this)
             
-            if ~isfield(this.sim_output,'transitions') || isempty(this.sim_output.transitions)
-                this.load_all_events
-            end
+            output_data = this.api.get_output_data();
+            it = output_data.iterator();
+            X = struct('time',[],'vehs',[],'flows',[],'link_ids',[]);
             
-            % load lanegroups
-            lanegroups = this.load_lanegroups;
-            lanegroup_ids = [lanegroups.id];
-            
-            % keep vehicle transitions and where vehicles change lane group
-            transitions = this.sim_output.transitions(cellfun(@(z) isa(z,'VehicleEvent') && z.from_lanegroup~=z.to_lanegroup,this.sim_output.transitions));
-            transition_times = cellfun(@(z) z.time,transitions);
-            
-            
-            % state structure
-            time = (this.start_time:dt:(this.start_time+this.duration));
-            X_struct = struct('vehicles',zeros(1,numel(time)),'flow_vph',zeros(1,numel(time)-1));
-            X = repmat(X_struct,1,numel(lanegroup_ids));
-            
-            for k=2:numel(time)
-                
-                trans_ind = transition_times>=time(k-1) & transition_times<time(k);
-                
-                % leave events
-                from = cellfun(@(z) double(z.from_lanegroup) , transitions(trans_ind));
-                unique_from = unique(from(~isnan(from)));
-                for i = 1:numel(unique_from)
-                    lg_ind = unique_from(i)==lanegroup_ids;
-                    leave_vehicles = sum(from==unique_from(i));
-                    X(lg_ind).vehicles(k) = X(lg_ind).vehicles(k) - leave_vehicles;
-                    X(lg_ind).flow_vph(k-1) = leave_vehicles * 3600/dt;
+            while(it.hasNext())
+
+                output = it.next();
+
+                link_ids = Java2Matlab(java.util.ArrayList(output.get_link_ids()));
+                if isempty(X.link_ids)
+                    X.link_ids = link_ids;
                 end
-                
-                % enter events
-                to = cellfun(@(z) double(z.to_lanegroup) , transitions(trans_ind));
-                unique_to = unique(to(~isnan(to)));
-                for i = 1:numel(unique_to)
-                    lg_ind = unique_to(i)==lanegroup_ids;
-                    enter_vehicles = sum(to==unique_to(i));
-                    X(lg_ind).vehicles(k) = X(lg_ind).vehicles(k) + enter_vehicles;
+
+                if ~setequals(X.link_ids,link_ids)
+                    error('incompatible output requests')
                 end
-                
-                % initialize next k
-                if k<numel(time)
-                    for i = 1:numel(lanegroup_ids)
-                        X(i).vehicles(k+1) = X(i).vehicles(k);
+                    
+                for j=1:numel(link_ids)
+                    link_id = link_ids(j);
+                    z = output.get_profile_for_linkid(java.lang.Long(link_id));
+                    time = Java2Matlab(z.get_times);
+                    
+                    if isempty(X.time)
+                        X.time = time;
                     end
+                    
+                    if( ~all(X.time==time) )
+                        error('incompatible output requests')
+                    end
+                    
+                    xind = index_into(link_id,X.link_ids);
+                    switch char(output.getClass().getName())
+                        case 'output.LinkFlow'
+                            X.flows(xind,:) = Java2Matlab(z.get_values);
+                        case 'output.LinkVehicles'
+                            X.vehs(xind,:) = Java2Matlab(z.get_values);
+                    end
+
                 end
                 
             end
-            
+             
         end
+        
+%         function [time,X] = get_state_trajectory(this,dt)
+%             
+%             if ~isfield(this.sim_output,'transitions') || isempty(this.sim_output.transitions)
+%                 this.load_all_events
+%             end
+%             
+%             % load lanegroups
+%             lanegroups = this.load_lanegroups;
+%             lanegroup_ids = [lanegroups.id];
+%             
+%             % keep vehicle transitions and where vehicles change lane group
+%             transitions = this.sim_output.transitions(cellfun(@(z) isa(z,'VehicleEvent') && z.from_lanegroup~=z.to_lanegroup,this.sim_output.transitions));
+%             transition_times = cellfun(@(z) z.time,transitions);
+%             
+%             
+%             % state structure
+%             time = (this.start_time:dt:(this.start_time+this.duration));
+%             X_struct = struct('vehicles',zeros(1,numel(time)),'flow_vph',zeros(1,numel(time)-1));
+%             X = repmat(X_struct,1,numel(lanegroup_ids));
+%             
+%             for k=2:numel(time)
+%                 
+%                 trans_ind = transition_times>=time(k-1) & transition_times<time(k);
+%                 
+%                 % leave events
+%                 from = cellfun(@(z) double(z.from_lanegroup) , transitions(trans_ind));
+%                 unique_from = unique(from(~isnan(from)));
+%                 for i = 1:numel(unique_from)
+%                     lg_ind = unique_from(i)==lanegroup_ids;
+%                     leave_vehicles = sum(from==unique_from(i));
+%                     X(lg_ind).vehicles(k) = X(lg_ind).vehicles(k) - leave_vehicles;
+%                     X(lg_ind).flow_vph(k-1) = leave_vehicles * 3600/dt;
+%                 end
+%                 
+%                 % enter events
+%                 to = cellfun(@(z) double(z.to_lanegroup) , transitions(trans_ind));
+%                 unique_to = unique(to(~isnan(to)));
+%                 for i = 1:numel(unique_to)
+%                     lg_ind = unique_to(i)==lanegroup_ids;
+%                     enter_vehicles = sum(to==unique_to(i));
+%                     X(lg_ind).vehicles(k) = X(lg_ind).vehicles(k) + enter_vehicles;
+%                 end
+%                 
+%                 % initialize next k
+%                 if k<numel(time)
+%                     for i = 1:numel(lanegroup_ids)
+%                         X(i).vehicles(k+1) = X(i).vehicles(k);
+%                     end
+%                 end
+%                 
+%             end
+%             
+%         end
         
     end
     
     methods(Access=private)
         
-        function [this] = load_all_events(this,time_period)
+        function [this] = load_vehicle_events(this,time_period)
             
             this.sim_output.transitions = [];
             

@@ -1,17 +1,45 @@
 clear
 close all
 
-configfile = 'C:\Users\gomes\code\otm\otm-base\src\main\resources\test_configs\diverges.xml';
-sim_dt = 1;
-modelname = 'ctm';
-lanewidth = 3;
-duration = 100;
-time_period = [0 duration];
+config_folder = 'C:\Users\gomes\code\otm\otm-base\src\main\resources\test_configs';
 
-otm = OTM(configfile,sim_dt,modelname);
-% otm.show_network(lanewidth)
-% otm.animate(time_period)
-otm.run_simple(0,duration)
-% paths = otm.get_path_travel_times();
-[time,X] = otm.get_state_trajectory(sim_dt);
+a = dir(config_folder);
+for i=1:numel(a)
+    if a(i).isdir
+        continue
+    end
+    
+    if length(a(i).name)<4 || ~strcmp(a(i).name(end-3:end),'.xml')
+        continue
+    end
+        
+    configfile = fullfile(config_folder,a(i).name);
+    sim_dt = 1;
+    modelname = 'ctm';
+    lanewidth = 3;
+    duration = 100;
+    time_period = [0 duration];
+    out_dt = sim_dt;
+    
+    otm = OTM(configfile,sim_dt,modelname);
+    
+    x = Scenario(configfile);
+    link_ids = x.get_link_ids;
+        
+    otm.run_simple(0,duration,link_ids,out_dt)
+    X = otm.get_state_trajectory();
+    
+    figure
+    subplot(211)
+    plot(X.time,X.vehs,'LineWidth',2)
+    ylabel('vehicles')
+    grid
+    subplot(212)
+    plot(X.time,X.flows,'LineWidth',2)
+    ylabel('flow [vph]')
+    grid
+    legend(num2str(X.link_ids'))
+    
+end
+
 
