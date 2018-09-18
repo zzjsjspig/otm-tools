@@ -159,8 +159,8 @@ classdef OTM < handle
                 for i=1:numel(request_links)
                     link_ids.add(java.lang.Long(request_links(i)));
                 end
-                this.api.request_links_flow([],link_ids, java.lang.Float(request_dt));
-                this.api.request_links_veh([], link_ids, java.lang.Float(request_dt));
+                this.api.request_links_flow(link_ids, java.lang.Float(request_dt));
+                this.api.request_links_veh(link_ids, java.lang.Float(request_dt));
             end
             
             % run the simulation
@@ -274,9 +274,9 @@ classdef OTM < handle
                     
                     xind = index_into(link_id,X.link_ids);
                     switch char(output.getClass().getName())
-                        case 'output.LinkFlow'
-                            X.flows(xind,:) = Java2Matlab(z.get_values);
-                        case 'output.LinkVehicles'
+                        case 'output.LinkCountGlobal'
+                            X.flows(xind,:) = diff(Java2Matlab(z.get_values))*3600/z.get_dt;
+                        case 'output.LinkVehiclesGlobal'
                             X.vehs(xind,:) = Java2Matlab(z.get_values);
                     end
 
