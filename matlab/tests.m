@@ -5,6 +5,7 @@ config_folder = 'C:\Users\gomes\code\otm\otm-base\src\main\resources\test_config
 
 a = dir(config_folder);
 for i=1:numel(a)
+    
     if a(i).isdir
         continue
     end
@@ -12,14 +13,18 @@ for i=1:numel(a)
     if length(a(i).name)<4 || ~strcmp(a(i).name(end-3:end),'.xml')
         continue
     end
+    
+    if strcmp(a(i).name,'signal.xml')
+        continue
+    end
         
     configfile = fullfile(config_folder,a(i).name);
     sim_dt = 1;
     modelname = 'ctm';
     lanewidth = 3;
-    duration = 100;
+    duration = 3600;
     time_period = [0 duration];
-    out_dt = sim_dt;
+    out_dt = 10;
     
     otm = OTM(configfile,sim_dt,modelname);
     
@@ -34,11 +39,11 @@ for i=1:numel(a)
     plot(X.time,X.vehs,'LineWidth',2)
     ylabel('vehicles')
     grid
+    legend(num2str(X.link_ids'))
     subplot(212)
-    plot(X.time,X.flows,'LineWidth',2)
+%     plot(X.time,X.flows,'LineWidth',2)
     ylabel('flow [vph]')
     grid
-    legend(num2str(X.link_ids'))
     
 end
 
