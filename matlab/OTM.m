@@ -11,6 +11,7 @@ classdef OTM < handle
         signalMap
         fig
         sim_output
+        sim_dt
         start_time
         duration
     end
@@ -28,6 +29,7 @@ classdef OTM < handle
                 modelname='ctm';
             end
             
+            this.sim_dt = sim_dt;
             this.lanewidth = 3;
             this.configfile = configfile;
             import runner.OTM
@@ -159,8 +161,8 @@ classdef OTM < handle
                 for i=1:numel(request_links)
                     link_ids.add(java.lang.Long(request_links(i)));
                 end
-                this.api.request_links_flow(link_ids, java.lang.Float(request_dt));
-                this.api.request_links_veh(link_ids, java.lang.Float(request_dt));
+                this.api.request_links_flow([],link_ids, java.lang.Float(request_dt));
+                this.api.request_links_veh([],link_ids, java.lang.Float(request_dt));
             end
             
             % run the simulation
@@ -274,9 +276,9 @@ classdef OTM < handle
                     
                     xind = index_into(link_id,X.link_ids);
                     switch char(output.getClass().getName())
-                        case 'output.LinkCountGlobal'
+                        case 'output.LinkCount'
                             X.flows(xind,:) = diff(Java2Matlab(z.get_values))*3600/z.get_dt;
-                        case 'output.LinkVehiclesGlobal'
+                        case 'output.LinkVehicles'
                             X.vehs(xind,:) = Java2Matlab(z.get_values);
                     end
 
