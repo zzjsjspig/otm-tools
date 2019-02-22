@@ -1,7 +1,7 @@
 clear
 close all
 
-config_folder = 'C:\Users\gomes\code\otm\otm-base\src\main\resources\test_configs';
+config_folder = 'C:\Users\lenovo\Downloads\line.xml';
 
 a = dir(config_folder);
 for i=1:numel(a)
